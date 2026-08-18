@@ -217,6 +217,54 @@ func ReadCFAData(filePath string, meta *domain.GFXMetadata) ([]uint16, error) {
 	return pixelData, nil
 }
 
+// ReadCFADataLibModular теперь принимает recovery bool для гибкого восстановления светов
+// ReadCFADataLibModular выполняет модульную проявку RAF-файла через LibRaw.
+// Если recovery = true, запускается двухпроходный алгоритм со спасением светов.
+// Если recovery = false, выполняется быстрая честная проявка (оригинальный биннинг).
+func ReadCFADataLibModular(filePath string, meta *domain.GFXMetadata, recovery bool) ([]uint16, error) {
+	// Шаг 1. Инициализация и распаковка RAW-матрицы в память Си
+	ipdata, err := initAndUnpackLibRaw(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка инициализации: %w", err)
+	}
+	// Гарантируем очистку контекста Си при выходе из функции
+	defer C.libraw_close(ipdata)
+
+	// Переносим геометрические размеры кадра в метаданные Go
+	width, height := int(ipdata.sizes.width), int(ipdata.sizes.height)
+	meta.Width, meta.Height = uint16(width), uint16(height)
+
+	// Шаг 2. ПЕРВЫЙ ПРОХОД — Честная проявка
+	configureLibRawParams(ipdata, 1, 1.0)
+	if ret := C.libraw_dcraw_process(ipdata); ret != 0 {
+		return nil, fmt.Errorf("ошибка базовой проявки LibRaw (код: %d)", ret)
+	}
+
+	// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Берем iwidth и iheight (выходные размеры после half_size)
+	outWidth, outHeight := int(ipdata.sizes.iwidth), int(ipdata.sizes.iheight)
+	meta.Width, meta.Height = uint16(outWidth), uint16(outHeight)
+
+	// Передаем правильные выходные размеры
+	pureData := extractPixelsFromC(ipdata, outWidth, outHeight)
+
+	if !recovery {
+		return pureData, nil
+	}
+
+	// Шаг 4. ВТОРОЙ ПРОХОД — Проявка со сдвигом экспозиции
+	configureLibRawParams(ipdata, 2, 0.2)
+	if ret := C.libraw_dcraw_process(ipdata); ret != 0 {
+		fmt.Printf("[Warning] Сбой второго прохода LibRaw (%d), возврат к базовому кадру\n", ret)
+		return pureData, nil
+	}
+
+	// Передаем те же скорректированные выходные размеры
+	darkData := extractPixelsFromC(ipdata, outWidth, outHeight)
+
+	// Шаг 6. Попиксельный LERP-блендинг
+	return blendHighlights(pureData, darkData, 55000), nil
+}
+
 func ReadCFADataLib(filePath string, meta *domain.GFXMetadata) ([]uint16, error) {
 	ipdata := C.libraw_init(0)
 	if ipdata == nil {
@@ -241,7 +289,7 @@ func ReadCFADataLib(filePath string, meta *domain.GFXMetadata) ([]uint16, error)
 	ipdata.params.user_qual = 3      // Высококачественный демозаик AHD
 	ipdata.params.output_color = 1   // Стандартное цветовое пространство sRGB
 	ipdata.params.no_auto_bright = 1 // Блокируем автоматический пересвет
-	ipdata.params.highlight = 0      // Чистый белый глянец бликов
+	ipdata.params.highlight = 1      // Чистый белый глянец бликов
 
 	// =================================================================
 	// ПРОФЕССИОНАЛЬНАЯ НАСТРОЙКА ЦВЕТА И ЭКСПОЗИЦИИ (HIGHLIGHT RECOVERY)

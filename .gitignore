@@ -4,6 +4,15 @@
 *pp3
 *-
 *_
-*tif
-*tiff
+*.tif
+*.tiff
+*.jpg
+*.dng
+*.exr
 *xmp
+./bins*
+rafparser
+rafparser.exe
+
+
+

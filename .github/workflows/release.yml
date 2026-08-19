@@ -1,0 +1,126 @@
+name: Build and Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*' # Скрипт запускается автоматически, когда вы пушите тег (например, v0.1.0)
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Go environment
+        uses: actions/tools/go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install MSYS2 and LibRaw for Windows
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libraw
+
+      - name: Build Windows Binary
+        shell: msys2 {0}
+        run: |
+          go get ://github.com
+          export CGO_CFLAGS="-I/mingw64/include"
+          export CGO_LDFLAGS="-L/mingw64/lib -lraw"
+          CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe main.go cmd.go
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafparser-windows
+          path: rafparser.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Go environment
+        uses: actions/tools/go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install LibRaw for Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libraw-dev
+
+      - name: Build Linux Binary
+        run: |
+          go get ://github.com
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o rafparser main.go cmd.go
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafparser-linux
+          path: rafparser
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Go environment
+        uses: actions/tools/go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install LibRaw for macOS
+        run: |
+          brew update
+          brew install libraw
+
+      - name: Build macOS Binary
+        run: |
+          go get ://github.com
+          # На macOS архитектура процессора на macos-latest обычно ARM64 (Apple Silicon M-серия)
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o rafparser-mac main.go cmd.go
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafparser-macos
+          path: rafparser-mac
+
+  create-release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rafparser-windows
+
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rafparser-linux
+
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rafparser-macos
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rafparser.exe
+            rafparser
+            rafparser-mac
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -10,9 +10,9 @@
 *.dng
 *.exr
 *xmp
-./bins*
-rafparser
-rafparser.exe
+
+./rafparser
+./rafparser.exe
 
 
 

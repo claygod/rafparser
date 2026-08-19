@@ -3,7 +3,7 @@ name: Build and Release Binaries
 on:
   push:
     tags:
-      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.4)
+      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.6)
 
 permissions:
   contents: write # Разрешение для автоматического прикрепления бинарников к релизу
@@ -19,6 +19,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: true # Включает автоматическое кэширование и скачивание зависимостей модулей
 
       - name: Install MSYS2 and LibRaw for Windows
         uses: msys2/setup-msys2@v2
@@ -33,7 +34,6 @@ jobs:
       - name: Build Windows Binary
         shell: msys2 {0}
         run: |
-          go get ://github.com
           export CGO_CFLAGS="-I/mingw64/include"
           export CGO_LDFLAGS="-L/mingw64/lib -lraw"
           CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe .
@@ -54,6 +54,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: true
 
       - name: Install LibRaw for Linux
         run: |
@@ -62,7 +63,6 @@ jobs:
 
       - name: Build Linux Binary
         run: |
-          go get ://github.com
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o rafparser-linux .
 
       - name: Upload Linux Artifact
@@ -81,6 +81,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: true
 
       - name: Install LibRaw for macOS
         run: |
@@ -89,7 +90,6 @@ jobs:
 
       - name: Build macOS Binary
         run: |
-          go get ://github.com
           CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o rafparser-mac .
 
       - name: Upload macOS Artifact

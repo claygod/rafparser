@@ -3,10 +3,10 @@ name: Build and Release Binaries
 on:
   push:
     tags:
-      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.2)
+      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.4)
 
 permissions:
-  contents: write # Обязательное разрешение для возможности прикрепления бинарников к релизу
+  contents: write # Разрешение для автоматического прикрепления бинарников к релизу
 
 jobs:
   build-windows:
@@ -25,6 +25,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
+          path-type: inherit # Пробрасывает PATH из Windows в MSYS2 для поиска go
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-libraw

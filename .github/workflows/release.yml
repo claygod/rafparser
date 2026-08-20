@@ -3,7 +3,7 @@ name: Build and Release Binaries
 on:
   push:
     tags:
-      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.12)
+      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.15)
 
 permissions:
   contents: write # Разрешение для автоматического прикрепления бинарников к релизу
@@ -26,7 +26,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          path-type: inherit # Пробрасывает PATH из Windows в MSYS2 для поиска go
+          path-type: inherit
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-libraw
@@ -35,20 +35,18 @@ jobs:
       - name: Build Windows Binary
         shell: msys2 {0}
         run: |
-          # -DLIBRAW_NODLL переводит заголовки в статический режим
           export CGO_CFLAGS="-I/mingw64/include -DLIBRAW_NODLL"
-          # ДОБАВЛЕН ФЛАГ -lz для устранения ошибки 'uncompress'
           export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lstdc++ -lgomp -ljpeg -llcms2 -lz -lws2_32 -lmingwthrd"
           CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe .
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rafparser-windows
+          name: rafparser-windows-${{ github.run_id }} # Уникальное имя артефакта
           path: rafparser.exe
 
   build-linux:
-    runs-on: ubuntu-22.04 # Используем поддерживаемый стабильный сервер GitHub КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ - гарантирует совместимость со старыми версиями GLIBC вместо ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -66,9 +64,6 @@ jobs:
 
       - name: Build Linux Binary
         run: |
-          # Внедряем ручное запекание libraw.a и системных библиотек.
-          # Флаг -Wl,--hash-style=both и базовая ubuntu-22.04 понизят планку GLIBC,
-          # сделав бинарник запускаемым на старых дистрибутивах.
           export CGO_CFLAGS="-I/usr/include"
           export CGO_LDFLAGS="/usr/lib/x86_64-linux-gnu/libraw.a -lm -lgomp -lstdc++ -pthread -ljpeg -llcms2 -lz -Wl,--hash-style=both"
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o rafparser-linux .
@@ -76,14 +71,7 @@ jobs:
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rafparser-linux-artifact
-          path: rafparser-linux
-
-
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rafparser-linux-artifact
+          name: rafparser-linux-${{ github.run_id }} # Уникальное имя артефакта убирает ошибку 409
           path: rafparser-linux
 
   build-macos:
@@ -110,7 +98,7 @@ jobs:
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rafparser-macos-artifact
+          name: rafparser-macos-${{ github.run_id }} # Уникальное имя артефакта
           path: rafparser-mac
 
   create-release:
@@ -120,7 +108,7 @@ jobs:
       - name: Download all workflow artifacts
         uses: actions/download-artifact@v4
         with:
-          merge-multiple: true # Собирает все файлы в один плоский корень релиза
+          merge-multiple: true # Скачает все три уникальные папки и сложит файлы вместе
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

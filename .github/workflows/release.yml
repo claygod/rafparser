@@ -48,7 +48,8 @@ jobs:
           path: rafparser.exe
 
   build-linux:
-    runs-on: ubuntu-latest
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: гарантирует совместимость со старыми версиями GLIBC вместо ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4

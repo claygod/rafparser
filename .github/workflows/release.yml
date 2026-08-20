@@ -3,7 +3,7 @@ name: Build and Release Binaries
 on:
   push:
     tags:
-      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.10)
+      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.11)
 
 permissions:
   contents: write # Разрешение для автоматического прикрепления бинарников к релизу
@@ -36,8 +36,8 @@ jobs:
         run: |
           # -DLIBRAW_NODLL переводит заголовки в статический режим
           export CGO_CFLAGS="-I/mingw64/include -DLIBRAW_NODLL"
-          # -lgomp решает проблему с OpenMP потоками в Windows
-          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lstdc++ -lgomp -lws2_32 -lmingwthrd"
+          # Проактивно добавляем -ljpeg и -llcms2 для Windows статической сборки
+          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lstdc++ -lgomp -ljpeg -llcms2 -lws2_32 -lmingwthrd"
           CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe .
 
       - name: Upload Windows Artifact
@@ -61,12 +61,13 @@ jobs:
       - name: Install LibRaw for Linux
         run: |
           sudo apt-get update
-          sudo apt-get install -y libraw-dev
+          # Устанавливаем LibRaw и все его статические графические зависимости
+          sudo apt-get install -y libraw-dev libjpeg-dev liblcms2-dev
 
       - name: Build Linux Binary
         run: |
-          # -lstdc++ решает проблему с C++ исключениями (__cxa_throw) в Linux
-          export CGO_LDFLAGS="-lraw -lm -lgomp -lstdc++ -pthread"
+          # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем -ljpeg и -llcms2 в общую цепочку линковки
+          export CGO_LDFLAGS="-lraw -lm -lgomp -lstdc++ -pthread -ljpeg -llcms2"
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags '-extldflags "-static"' -o rafparser-linux .
 
       - name: Upload Linux Artifact

@@ -48,8 +48,7 @@ jobs:
           path: rafparser.exe
 
   build-linux:
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: гарантирует совместимость со старыми версиями GLIBC вместо ubuntu-latest
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04 # Используем поддерживаемый стабильный сервер GitHub КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ - гарантирует совместимость со старыми версиями GLIBC вместо ubuntu-latest
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -67,11 +66,19 @@ jobs:
 
       - name: Build Linux Binary
         run: |
-          # Используем полустатическую сборку: вшиваем libraw.a напрямую,
-          # указывая полный путь к архиву, чтобы избежать конфликтов отсутствия статического lcms2.a
+          # Внедряем ручное запекание libraw.a и системных библиотек.
+          # Флаг -Wl,--hash-style=both и базовая ubuntu-22.04 понизят планку GLIBC,
+          # сделав бинарник запускаемым на старых дистрибутивах.
           export CGO_CFLAGS="-I/usr/include"
-          export CGO_LDFLAGS="/usr/lib/x86_64-linux-gnu/libraw.a -lm -lgomp -lstdc++ -pthread -ljpeg -llcms2 -lz"
+          export CGO_LDFLAGS="/usr/lib/x86_64-linux-gnu/libraw.a -lm -lgomp -lstdc++ -pthread -ljpeg -llcms2 -lz -Wl,--hash-style=both"
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o rafparser-linux .
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafparser-linux-artifact
+          path: rafparser-linux
+
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4

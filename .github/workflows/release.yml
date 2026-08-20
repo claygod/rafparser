@@ -3,7 +3,7 @@ name: Build and Release Binaries
 on:
   push:
     tags:
-      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.6)
+      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.7)
 
 permissions:
   contents: write # Разрешение для автоматического прикрепления бинарников к релизу
@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: true # Включает автоматическое кэширование и скачивание зависимостей модулей
+          cache: true
 
       - name: Install MSYS2 and LibRaw for Windows
         uses: msys2/setup-msys2@v2
@@ -35,7 +35,8 @@ jobs:
         shell: msys2 {0}
         run: |
           export CGO_CFLAGS="-I/mingw64/include"
-          export CGO_LDFLAGS="-L/mingw64/lib -lraw"
+          # Флаг -static заставляет линковать libraw.a и скрывает зависимости от внешних .dll
+          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lws2_32"
           CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe .
 
       - name: Upload Windows Artifact
@@ -59,11 +60,13 @@ jobs:
       - name: Install LibRaw for Linux
         run: |
           sudo apt-get update
+          # Для статической сборки нам понадобятся исходные статические библиотеки (.a)
           sudo apt-get install -y libraw-dev
 
       - name: Build Linux Binary
         run: |
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o rafparser-linux .
+          # Флаг '-extldflags "-static"' принудительно вшивает libraw.a и libc внутрь бинарника
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags '-extldflags "-static"' -o rafparser-linux .
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4

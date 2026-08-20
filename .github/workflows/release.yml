@@ -34,9 +34,10 @@ jobs:
       - name: Build Windows Binary
         shell: msys2 {0}
         run: |
-          export CGO_CFLAGS="-I/mingw64/include"
-          # Флаг -static заставляет линковать libraw.a и скрывает зависимости от внешних .dll
-          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lws2_32"
+          # -DLIBRAW_NODLL отключает генерацию префиксов __imp_ и переводит заголовки в статический режим
+          export CGO_CFLAGS="-I/mingw64/include -DLIBRAW_NODLL"
+          # Добавляем -lstdc++ (так как LibRaw написан на C++) и системные библиотеки Windows
+          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lstdc++ -lws2_32 -lmingwthrd"
           CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe .
 
       - name: Upload Windows Artifact
@@ -60,12 +61,14 @@ jobs:
       - name: Install LibRaw for Linux
         run: |
           sudo apt-get update
-          # Для статической сборки нам понадобятся исходные статические библиотеки (.a)
+          # Устанавливаем заголовки и статические библиотеки LibRaw
           sudo apt-get install -y libraw-dev
 
       - name: Build Linux Binary
         run: |
-          # Флаг '-extldflags "-static"' принудительно вшивает libraw.a и libc внутрь бинарника
+          # ВАЖНО: Добавляем системные библиотеки -lm (математика) и -lgomp (многопоточность OpenMP)
+          # Флаг -pthread включает корректную работу потоков Си в статической сборке
+          export CGO_LDFLAGS="-lraw -lm -lgomp -pthread"
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags '-extldflags "-static"' -o rafparser-linux .
 
       - name: Upload Linux Artifact

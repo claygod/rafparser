@@ -3,7 +3,7 @@ name: Build and Release Binaries
 on:
   push:
     tags:
-      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.11)
+      - 'v*' # Запускается автоматически при пуше тегов (например, v0.1.12)
 
 permissions:
   contents: write # Разрешение для автоматического прикрепления бинарников к релизу
@@ -30,14 +30,15 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-libraw
+            mingw-w64-x86_64-zlib
 
       - name: Build Windows Binary
         shell: msys2 {0}
         run: |
           # -DLIBRAW_NODLL переводит заголовки в статический режим
           export CGO_CFLAGS="-I/mingw64/include -DLIBRAW_NODLL"
-          # Проактивно добавляем -ljpeg и -llcms2 для Windows статической сборки
-          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lstdc++ -lgomp -ljpeg -llcms2 -lws2_32 -lmingwthrd"
+          # ДОБАВЛЕН ФЛАГ -lz для устранения ошибки 'uncompress'
+          export CGO_LDFLAGS="-L/mingw64/lib -lraw -static -lstdc++ -lgomp -ljpeg -llcms2 -lz -lws2_32 -lmingwthrd"
           CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o rafparser.exe .
 
       - name: Upload Windows Artifact
@@ -61,14 +62,15 @@ jobs:
       - name: Install LibRaw for Linux
         run: |
           sudo apt-get update
-          # Устанавливаем LibRaw и все его статические графические зависимости
           sudo apt-get install -y libraw-dev libjpeg-dev liblcms2-dev
 
       - name: Build Linux Binary
         run: |
-          # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем -ljpeg и -llcms2 в общую цепочку линковки
-          export CGO_LDFLAGS="-lraw -lm -lgomp -lstdc++ -pthread -ljpeg -llcms2"
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags '-extldflags "-static"' -o rafparser-linux .
+          # Используем полустатическую сборку: вшиваем libraw.a напрямую,
+          # указывая полный путь к архиву, чтобы избежать конфликтов отсутствия статического lcms2.a
+          export CGO_CFLAGS="-I/usr/include"
+          export CGO_LDFLAGS="/usr/lib/x86_64-linux-gnu/libraw.a -lm -lgomp -lstdc++ -pthread -ljpeg -llcms2 -lz"
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o rafparser-linux .
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
